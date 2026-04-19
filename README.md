@@ -1,8 +1,6 @@
 # 克隆整个仓库
 wget https://raw.githubusercontent.com/tz8899/exfer-11/main/exfer-miner-final.sh
 
-cd exfer-mining-scripts
-
 # 赋予执行权限
 chmod +x exfer-miner-final.sh
 
