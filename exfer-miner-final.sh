@@ -128,7 +128,12 @@ start_mining() {
         return 1
     fi
     
-    PUBKEY=$("$EXFER_BIN" wallet info --wallet "$EXFER_WALLET" --json 2>/dev/null | jq -r '.pubkey')
+    # 新代码（支持密码输入）
+read -sp "输入钱包密码: " PASSPHRASE
+echo
+export EXFER_PASS="$PASSPHRASE"
+
+PUBKEY=$("$EXFER_BIN" wallet info --wallet "$EXFER_WALLET" --passphrase-env EXFER_PASS --json 2>/dev/null | jq -r '.pubkey')
     
     if [ -z "$PUBKEY" ] || [ "$PUBKEY" == "null" ]; then
         print_error "获取公钥失败"
