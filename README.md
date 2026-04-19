@@ -1,5 +1,5 @@
 # 克隆整个仓库
-[git clone https://github.com/tz8899/exfer-mining-scripts.git](https://github.com/tz8899/exfer-11)
+wget https://raw.githubusercontent.com/tz8899/exfer-11/main/exfer-miner-final.sh
 
 cd exfer-mining-scripts
 
