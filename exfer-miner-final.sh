@@ -129,11 +129,39 @@ start_mining() {
     fi
     
     # 新代码（支持密码输入）
+# ✅ 修复后
 read -sp "输入钱包密码: " PASSPHRASE
 echo
 export EXFER_PASS="$PASSPHRASE"
 
-PUBKEY=$("$EXFER_BIN" wallet info --wallet "$EXFER_WALLET" --passphrase-env EXFER_PASS --json 2>/dev/null | jq -r '.pubkey')
+# 第一步：获取完整JSON，保留错误信息
+print_info "读取钱包信息..."
+WALLET_JSON=$("$EXFER_BIN" wallet info --wallet "$EXFER_WALLET" --passphrase-env EXFER_PASS --json 2>&1)
+
+# 第二步：检查命令是否执行成功
+if [ $? -ne 0 ]; then
+    print_error "钱包访问失败 - 密码可能错误"
+    echo "错误信息: $WALLET_JSON"
+    return 1
+fi
+
+# 第三步：验证JSON中是否有pubkey字段
+if ! echo "$WALLET_JSON" | grep -q '"pubkey"'; then
+    print_error "获取公钥失败 - 钱包可能损坏"
+    echo "响应: $WALLET_JSON"
+    return 1
+fi
+
+# 第四步：安全地提取公钥
+PUBKEY=$(echo "$WALLET_JSON" | jq -r '.pubkey' 2>/dev/null)
+
+# 第五步：验证公钥是否有效
+if [ -z "$PUBKEY" ] || [ "$PUBKEY" = "null" ]; then
+    print_error "无法提取公钥 - JSON解析失败"
+    return 1
+fi
+
+print_success "公钥获取成功: ${PUBKEY:0:16}...${PUBKEY: -16}"
     
     if [ -z "$PUBKEY" ] || [ "$PUBKEY" == "null" ]; then
         print_error "获取公钥失败"
