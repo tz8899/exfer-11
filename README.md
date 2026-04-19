@@ -1,5 +1,5 @@
 # 克隆整个仓库
-git clone https://github.com/tz8899/exfer-mining-scripts.git
+[git clone https://github.com/tz8899/exfer-mining-scripts.git](https://github.com/tz8899/exfer-11)
 cd exfer-mining-scripts
 
 # 赋予执行权限
