@@ -1,15 +1,16 @@
-name=exfer-miner-final.sh url=https://github.com/tz8899/exfer-mining-scripts/blob/main/exfer-miner-final.sh
+cat > ~/exfer-miner-final.sh << 'SCRIPT_EOF'
 #!/bin/bash
 
 ################################################################################
-# Exfer 个人挖矿工具 v3.0 - 最终完整版
+# Exfer 个人挖矿工具 v3.0 - 最终完整版（完全修复）
 # 功能：安装、初始化、挖矿、钱包、任务、监控、日志查看
 # 为个人矿工优化 - 简洁、易用、功能完整
 # 更新时间：2026-04-19
 # GitHub: https://github.com/tz8899/exfer-mining-scripts
 ################################################################################
 
-set -e
+# ⚠️ 移除 set -e，改为手动处理错误
+set +e
 
 # ================ 配置 ================
 RPC_ENDPOINT="${RPC:-http://82.221.100.201:9334}"
@@ -119,7 +120,7 @@ init_node() {
     fi
 }
 
-# ================ 3. 启动挖矿 ================
+# ================ 3. 启动挖矿（完全修复） ================
 start_mining() {
     print_header "启动挖矿"
     
@@ -128,47 +129,41 @@ start_mining() {
         return 1
     fi
     
-    # 新代码（支持密码输入）
-# ✅ 修复后
-read -sp "输入钱包密码: " PASSPHRASE
-echo
-export EXFER_PASS="$PASSPHRASE"
-
-# 第一步：获取完整JSON，保留错误信息
-print_info "读取钱包信息..."
-WALLET_JSON=$("$EXFER_BIN" wallet info --wallet "$EXFER_WALLET" --passphrase-env EXFER_PASS --json 2>&1)
-
-# 第二步：检查命令是否执行成功
-if [ $? -ne 0 ]; then
-    print_error "钱包访问失败 - 密码可能错误"
-    echo "错误信息: $WALLET_JSON"
-    return 1
-fi
-
-# 第三步：验证JSON中是否有pubkey字段
-if ! echo "$WALLET_JSON" | grep -q '"pubkey"'; then
-    print_error "获取公钥失败 - 钱包可能损坏"
-    echo "响应: $WALLET_JSON"
-    return 1
-fi
-
-# 第四步：安全地提取公钥
-PUBKEY=$(echo "$WALLET_JSON" | jq -r '.pubkey' 2>/dev/null)
-
-# 第五步：验证公钥是否有效
-if [ -z "$PUBKEY" ] || [ "$PUBKEY" = "null" ]; then
-    print_error "无法提取公钥 - JSON解析失败"
-    return 1
-fi
-
-print_success "公钥获取成功: ${PUBKEY:0:16}...${PUBKEY: -16}"
+    # 第一步：获取密码
+    read -sp "输入钱包密码: " PASSPHRASE
+    echo
+    export EXFER_PASS="$PASSPHRASE"
     
-    if [ -z "$PUBKEY" ] || [ "$PUBKEY" == "null" ]; then
-        print_error "获取公钥失败"
+    # 第二步：读取钱包信息
+    print_info "读取钱包信息..."
+    WALLET_JSON=$("$EXFER_BIN" wallet info --wallet "$EXFER_WALLET" --passphrase-env EXFER_PASS --json 2>&1)
+    
+    CMD_RESULT=$?
+    if [ $CMD_RESULT -ne 0 ]; then
+        print_error "钱包访问失败 - 密码可能错误"
+        echo "错误信息: $WALLET_JSON"
         return 1
     fi
     
-    print_info "使用公钥: ${PUBKEY:0:16}...${PUBKEY: -16}"
+    # 第三步：验证 JSON 是否有效
+    if ! echo "$WALLET_JSON" | grep -q '"pubkey"'; then
+        print_error "获取公钥失败 - 钱包可能损坏"
+        echo "响应: $WALLET_JSON"
+        return 1
+    fi
+    
+    # 第四步：提取公钥
+    PUBKEY=$(echo "$WALLET_JSON" | jq -r '.pubkey' 2>/dev/null)
+    
+    if [ $? -ne 0 ] || [ -z "$PUBKEY" ] || [ "$PUBKEY" = "null" ]; then
+        print_error "无法提取公钥 - JSON 解析失败"
+        echo "钱包信息: $WALLET_JSON"
+        return 1
+    fi
+    
+    print_success "公钥获取成功: ${PUBKEY:0:16}...${PUBKEY: -16}"
+    
+    # 第五步：启动挖矿进程
     print_info "启动挖矿进程..."
     
     nohup "$EXFER_BIN" mine \
@@ -182,13 +177,14 @@ print_success "公钥获取成功: ${PUBKEY:0:16}...${PUBKEY: -16}"
     echo $MINER_PID > "$EXFER_HOME/miner.pid"
     
     sleep 2
-    if ps -p $MINER_PID > /dev/null 2>/dev/null; then
+    if ps -p $MINER_PID > /dev/null 2>&1; then
         print_success "挖矿已启动"
         print_info "进程 ID: $MINER_PID"
         print_info "日志文件: $LOG_FILE"
         return 0
     else
-        print_error "启动失败"
+        print_error "启动失败，查看日志:"
+        tail -10 "$LOG_FILE"
         return 1
     fi
 }
@@ -199,7 +195,7 @@ stop_mining() {
     
     if [ -f "$EXFER_HOME/miner.pid" ]; then
         PID=$(cat "$EXFER_HOME/miner.pid")
-        if ps -p $PID > /dev/null 2>/dev/null; then
+        if ps -p $PID > /dev/null 2>&1; then
             if kill $PID 2>/dev/null; then
                 sleep 2
                 print_success "挖矿已停止"
@@ -233,11 +229,8 @@ wallet_info() {
     
     echo
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo "📍 钱包地址:"
-    echo -e "${GREEN}$ADDRESS${NC}"
-    echo
-    echo "🔑 公钥:"
-    echo -e "${GREEN}$PUBKEY${NC}"
+    printf "%-20s %s\n" "📍 钱包地址:" "$ADDRESS"
+    printf "%-20s %s\n" "🔑 公钥:" "$PUBKEY"
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo
 }
@@ -263,9 +256,8 @@ check_balance() {
     
     echo
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo "💰 钱包余额:"
-    echo -e "${GREEN}$BALANCE_EXFER EXFER${NC}"
-    echo "   ($BALANCE_EXFERS exfers)"
+    printf "%-20s %s EXFER\n" "💰 钱包余额:" "$BALANCE_EXFER"
+    printf "%-20s %s exfers\n" "" "($BALANCE_EXFERS)"
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo
     
@@ -440,7 +432,7 @@ monitor_mining() {
         echo -e "${BLUE}【挖矿状态】${NC}"
         if [ -f "$EXFER_HOME/miner.pid" ]; then
             PID=$(cat "$EXFER_HOME/miner.pid")
-            if ps -p $PID > /dev/null 2>/dev/null; then
+            if ps -p $PID > /dev/null 2>&1; then
                 echo "⛏️  进程状态: 运行中"
                 echo "📊 进程 ID: $PID"
             else
@@ -477,7 +469,7 @@ mining_status() {
     
     if [ -f "$EXFER_HOME/miner.pid" ]; then
         PID=$(cat "$EXFER_HOME/miner.pid")
-        if ps -p $PID > /dev/null 2>/dev/null; then
+        if ps -p $PID > /dev/null 2>&1; then
             print_success "挖矿进程运行中"
             print_info "进程 ID: $PID"
             
@@ -682,10 +674,10 @@ if [ $# -gt 0 ]; then
             echo ""
             echo "【监控与日志】"
             echo "  monitor            - 实时监控面板"
-            echo "  logs               - 查看日志"
+            echo "  logs               - 查看��志"
             echo ""
             echo "【系统配置】"
-            echo "  install            - ���装 Exfer"
+            echo "  install            - 安装 Exfer"
             echo "  init               - 初始化钱包"
             echo ""
             echo "【无参数使用】"
@@ -704,3 +696,7 @@ if [ $# -gt 0 ]; then
 else
     main
 fi
+
+SCRIPT_EOF
+
+chmod +x ~/exfer-miner-final.sh
