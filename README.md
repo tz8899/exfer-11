@@ -1,5 +1,7 @@
 sudo apt-get update
 
+sudo apt-get install -y jq
+
 # 克隆整个仓库
 wget https://raw.githubusercontent.com/tz8899/exfer-11/main/exfer-miner-final.sh
 
